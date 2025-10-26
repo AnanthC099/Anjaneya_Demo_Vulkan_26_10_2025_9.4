@@ -1,0 +1,47 @@
+diff --git a/SceneSwitcher.h b/SceneSwitcher.h
+--- a/SceneSwitcher.h
++++ b/SceneSwitcher.h
+@@ -33,6 +33,15 @@
+ #include "glm/glm.hpp"
+ #include "glm/gtc/matrix_transform.hpp"
+ 
++/* --------------------------------------------------------------------------
++   Centralized key bindings for scene switching (WM_KEYDOWN / virtual-keys)
++   Change these if you prefer different keys in the future.
++   -------------------------------------------------------------------------- */
++#ifndef SCENESWITCHER_KEY_SCENE0
++#define SCENESWITCHER_KEY_SCENE0 VK_F1
++#endif
++#ifndef SCENESWITCHER_KEY_SCENE1
++#define SCENESWITCHER_KEY_SCENE1 VK_F2
++#endif
++
+ #ifndef WIN_WIDTH
+ #define WIN_WIDTH 800
+ #endif
+diff --git a/SceneSwitcher.cpp b/SceneSwitcher.cpp
+--- a/SceneSwitcher.cpp
++++ b/SceneSwitcher.cpp
+@@ -246,17 +246,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
+                 case 0x66:
+                         gWin32FunctionTable_Switcher.ToggleFullscreen();
+                         break;
+-
+-                case '0':
++
++                case SCENESWITCHER_KEY_SCENE0:
+                         gActiveScene = ACTIVE_SCENE_SCENE0;
+                         fprintf(gCtx_Switcher.gpFile, "WndProc() --> Active scene set to 0\n");
+                         break;
+-
+-                case '1':
++
++                case SCENESWITCHER_KEY_SCENE1:
+                         gActiveScene = ACTIVE_SCENE_SCENE1;
+                         fprintf(gCtx_Switcher.gpFile, "WndProc() --> Active scene set to 1\n");
+                         break;
+ 
+                 default:
+                         break;
+                 }
+                 break;

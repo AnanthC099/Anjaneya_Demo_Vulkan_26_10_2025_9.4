@@ -1,0 +1,178 @@
+diff --git a/SceneSwitcher.h b/SceneSwitcher.h
+index 0000000..1111111 100644
+--- a/SceneSwitcher.h
++++ b/SceneSwitcher.h
+@@ -1,15 +1,16 @@
+ #pragma once
+ 
+ #define MYICON 1001
+ #define MYAUDIO 102
+ 
+ #ifndef RC_INVOKED
+ 
+ #include <windows.h>
+ 
+-#include <cstdio>
+-#include <cstdint>
++/* Prefer C headers, avoid C++ std headers */
++#include <stdio.h>
++#include <stdint.h>
+ 
+ #ifndef VK_USE_PLATFORM_WIN32_KHR
+ #define VK_USE_PLATFORM_WIN32_KHR
+ #endif
+ #include <vulkan/vulkan.h>
+@@ -92,6 +93,7 @@
+ #endif
+ #include "glm/glm.hpp"
+ #include "glm/gtc/matrix_transform.hpp"
+ 
+ #ifndef WIN_WIDTH
+ #define WIN_WIDTH 800
+ #endif
+@@ -120,6 +122,7 @@ struct Win32WindowContext_Switcher
+     int giHeight = 0;
+     int giWidth = 0;
+ };
+ 
+ struct GlobalContext_Switcher
+ {
+     FILE* gpFile = NULL;
+@@ -176,8 +179,10 @@ struct GlobalContext_Switcher
+     // commandPool
+     VkCommandPool vkCommandPool = VK_NULL_HANDLE;
+ 
+     // Command Buffers per scene
+     VkCommandBuffer* vkCommandBuffer_scene0_array = NULL;
+     VkCommandBuffer* vkCommandBuffer_scene1_array = NULL;
++    VkCommandBuffer* vkCommandBuffer_scene2_array = NULL;
+ 
+     // RenderPass
+     VkRenderPass vkRenderPass = VK_NULL_HANDLE;
+ 
+@@ -212,12 +217,18 @@ struct GlobalContext_Switcher
+     // Uniform related declarations
+     struct MyUniformData
+     {
+         glm::mat4 modelMatrix;
+         glm::mat4 viewMatrix;
+         glm::mat4 projectionMatrix;
+-        glm::vec4 fade;   // use .x in shaders
++        /*
++            Scene 0: use fade.x
++            Scene 1: (overlay params) fade = (fade, screenW, screenH, overlaySize)
++            Scene 2: not used (kept zero)
++        */
++        glm::vec4 fade;
+     };
+ 
+     struct UniformData
+     {
+         VkBuffer vkBuffer = VK_NULL_HANDLE;
+         VkDeviceMemory vkDeviceMemory = VK_NULL_HANDLE;
+     };
+ 
+     UniformData uniformData_scene0;
+     UniformData uniformData_scene1;
++    UniformData uniformData_scene2;
+ 
+     // Shader related variables
+     VkShaderModule vkShaderModule_vertex_shader = VK_NULL_HANDLE;
+     VkShaderModule vkShaderModule_fragment_shader = VK_NULL_HANDLE;
+@@ -236,10 +247,12 @@ struct GlobalContext_Switcher
+     // Descriptor set
+     VkDescriptorSet vkDescriptorSet_scene0 = VK_NULL_HANDLE;
+     VkDescriptorSet vkDescriptorSet_scene1 = VK_NULL_HANDLE;
++    VkDescriptorSet vkDescriptorSet_scene2 = VK_NULL_HANDLE;
+ 
+     // Pipeline
+     VkViewport vkViewport;
+     VkRect2D vkRect2D_scissor; // mostly viewport and scissor dimensions are same
+     VkPipeline vkPipeline_scene0 = VK_NULL_HANDLE;
+     VkPipeline vkPipeline_scene1 = VK_NULL_HANDLE;
++    VkPipeline vkPipeline_scene2 = VK_NULL_HANDLE;
+     VkPipelineCache vkPipelineCache = VK_NULL_HANDLE;
+ 
+     float angle = 0.0f;
+ 
+     // Texture related global data (Scene 0 / Scene 1 share this for Scene 0 content)
+     VkImage vkImage_texture = VK_NULL_HANDLE;
+     VkDeviceMemory vkDeviceMemory_texture = VK_NULL_HANDLE;
+     VkImageView vkImageView_texture = VK_NULL_HANDLE;
+     VkSampler vkSampler_texture = VK_NULL_HANDLE;
+ 
++    // Texture related global data for Scene 2
++    VkImage vkImage_texture_scene2 = VK_NULL_HANDLE;
++    VkDeviceMemory vkDeviceMemory_texture_scene2 = VK_NULL_HANDLE;
++    VkImageView vkImageView_texture_scene2 = VK_NULL_HANDLE;
++    VkSampler vkSampler_texture_scene2 = VK_NULL_HANDLE;
++
+     // Global
+     float gFade = 1.0f;
+ };
+ 
+ #endif // RC_INVOKED
+@@ -250,6 +263,7 @@ extern Win32WindowContext_Switcher gWin32WindowCtx_Switcher;
+ extern GlobalContext_Switcher gCtx_Switcher;
+ 
+ struct Win32FunctionTable_Switcher
+ {
+     LRESULT (CALLBACK* WndProc)(HWND, UINT, WPARAM, LPARAM) = nullptr;
+     void (*Update)(void) = nullptr;
+     VkResult (*Initialize)(void) = nullptr;
+     VkResult (*Resize)(int, int) = nullptr;
+     VkResult (*Display)(void) = nullptr;
+     void (*Uninitialize)(void) = nullptr;
+     void (*ToggleFullscreen)(void) = nullptr;
+ };
+ 
+ extern Win32FunctionTable_Switcher gWin32FunctionTable_Switcher;
+ 
+ struct FunctionTable_Switcher
+ {
+     VkResult (*createVulkanInstance)(void) = nullptr;
+     VkResult (*fillInstanceExtensionNames)(void) = nullptr;
+     VkResult (*fillValidationLayerNames)(void) = nullptr;
+     VkResult (*createValidationCallbackFunction)(void) = nullptr;
+     VkResult (*getSupportedSurface)(void) = nullptr;
+     VkResult (*getPhysicalDevice)(void) = nullptr;
+     VkResult (*printVkInfo)(void) = nullptr;
+     VkResult (*fillDeviceExtensionNames)(void) = nullptr;
+     VkResult (*createVulkanDevice)(void) = nullptr;
+     void (*getDeviceQueue)(void) = nullptr;
+     VkResult (*getPhysicalDeviceSurfaceFormatAndColorSpace)(void) = nullptr;
+     VkResult (*getPhysicalDevicePresentMode)(void) = nullptr;
+     VkResult (*createSwapchain)(VkBool32) = nullptr;
+     VkBool32 (*HasStencilComponent)(VkFormat) = nullptr;
+     VkResult (*createImagesAndImageViews)(void) = nullptr;
+     VkResult (*GetSupportedDepthFormat)(void) = nullptr;
+     VkResult (*createCommandPool)(void) = nullptr;
+     VkResult (*createCommandBuffers)(void) = nullptr;
+     VkResult (*createVertexBuffer)(void) = nullptr;
+     VkResult (*createTexture)(const char*) = nullptr;
+     VkResult (*createUniformBuffer)(void) = nullptr;
+     VkResult (*updateUniformBuffer)(void) = nullptr;
+     VkResult (*createShaders)(void) = nullptr;
+     VkResult (*createDescriptorSetLayout)(void) = nullptr;
+     VkResult (*createPipelineLayout)(void) = nullptr;
+     VkResult (*createDescriptorPool)(void) = nullptr;
+     VkResult (*createDescriptorSet)(void) = nullptr;
+     VkResult (*createRenderPass)(void) = nullptr;
+     VkResult (*createPipeline)(void) = nullptr;
+     VkResult (*createFrameBuffers)(void) = nullptr;
+     VkResult (*createSemaphores)(void) = nullptr;
+     VkResult (*createFences)(void) = nullptr;
+     VkResult (*buildCommandBuffers)(void) = nullptr;
+     VKAPI_ATTR VkBool32 (VKAPI_CALL* debugReportCallback)(VkDebugReportFlagsEXT,
+                                                           VkDebugReportObjectTypeEXT,
+                                                           uint64_t,
+                                                           size_t,
+                                                           int32_t,
+                                                           const char*,
+                                                           const char*,
+                                                           void*) = nullptr;
+ };
+ 
+ extern FunctionTable_Switcher gFunctionTable_Switcher;
+ 
+ void InitializeFunctionTable(void);

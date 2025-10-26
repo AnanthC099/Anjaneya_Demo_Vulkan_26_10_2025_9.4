@@ -1,0 +1,669 @@
+diff --git a/SceneSwitcher.cpp b/SceneSwitcher.cpp
+index 0000000..2222222 100644
+--- a/SceneSwitcher.cpp
++++ b/SceneSwitcher.cpp
+@@ -1,11 +1,12 @@
+ //Header file
+ #include <windows.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <algorithm>
+ #include <mmsystem.h>
+ //header file for texture
+ #define STB_IMAGE_IMPLEMENTATION
+ #include "stb_image.h"
+ #include "SceneSwitcher.h"
+@@ -23,10 +24,12 @@ FunctionTable_Switcher gFunctionTable_Switcher;
+ enum class ActiveScene
+ {
+     Scene0 = 0,
+-    Scene1 = 1
++    Scene1 = 1,
++    Scene2 = 2
+ };
+ 
+ ActiveScene gActiveScene = ActiveScene::Scene0;
++
+@@ -135,6 +138,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
+                 case '1':
+                         gActiveScene = ActiveScene::Scene1;
+                         fprintf(gCtx_Switcher.gpFile, "WndProc() --> Active scene set to 1\n");
+                         break;
++                case VK_F3:
++                        gActiveScene = ActiveScene::Scene2;
++                        fprintf(gCtx_Switcher.gpFile, "WndProc() --> Active scene set to 2 (F3)\n");
++                        break;
+ 
+                 default:
+                         break;
+                 }
+                 break;
+@@ -329,12 +338,24 @@ VkResult Display(void)
+     vkSubmitInfo.waitSemaphoreCount = 1;
+     vkSubmitInfo.pWaitSemaphores = &gCtx_Switcher.vkSemaphore_backBuffer;
+-    VkCommandBuffer activeCommandBuffer = (gActiveScene == ActiveScene::Scene0)
+-                                              ? gCtx_Switcher.vkCommandBuffer_scene0_array[gCtx_Switcher.currentImageIndex]
+-                                              : gCtx_Switcher.vkCommandBuffer_scene1_array[gCtx_Switcher.currentImageIndex];
++    VkCommandBuffer activeCommandBuffer = gCtx_Switcher.vkCommandBuffer_scene0_array[gCtx_Switcher.currentImageIndex];
++    if (gActiveScene == ActiveScene::Scene1)
++    {
++        activeCommandBuffer = gCtx_Switcher.vkCommandBuffer_scene1_array[gCtx_Switcher.currentImageIndex];
++    }
++    else if (gActiveScene == ActiveScene::Scene2)
++    {
++        activeCommandBuffer = gCtx_Switcher.vkCommandBuffer_scene2_array[gCtx_Switcher.currentImageIndex];
++    }
+     vkSubmitInfo.commandBufferCount = 1;
+     vkSubmitInfo.pCommandBuffers = &activeCommandBuffer;
+     vkSubmitInfo.signalSemaphoreCount = 1;
+     vkSubmitInfo.pSignalSemaphores = &gCtx_Switcher.vkSemaphore_renderComplete;
+@@ -381,6 +402,10 @@ void Update(void)
+ {
+-    gCtx_Switcher.gFade = 1.0f;
++    if (gActiveScene == ActiveScene::Scene1)
++    {
++        UpdateCameraAnim();
++    }
++    else
++    {
++        gCtx_Switcher.gFade = 1.0f;
++    }
+ }
+ 
+@@ -820,6 +845,56 @@ VkResult createShaders(void)
+     fprintf(gCtx_Switcher.gpFile, "createShaders() --> fragment Shader module successfully created\n");
+      
++    /* ===== Scene 2 shader modules ===== */
++    {
++        const char* szFileName = "Shader_Scene2.vert.spv";
++        FILE* fp = fopen(szFileName, "rb");
++        if (!fp)
++        {
++            fprintf(gCtx_Switcher.gpFile, "createShaders() --> fopen() failed for Shader_Scene2.vert.spv\n");
++            return VK_ERROR_INITIALIZATION_FAILED;
++        }
++        fseek(fp, 0L, SEEK_END);
++        size_t size = (size_t)ftell(fp);
++        fseek(fp, 0L, SEEK_SET);
++        char* shaderData = (char*)malloc(size);
++        size_t retVal = fread(shaderData, size, 1, fp);
++        fclose(fp);
++        if (retVal != 1)
++        {
++            free(shaderData);
++            fprintf(gCtx_Switcher.gpFile, "createShaders() --> fread() failed for Shader_Scene2.vert.spv\n");
++            return VK_ERROR_INITIALIZATION_FAILED;
++        }
++        VkShaderModuleCreateInfo ci;
++        memset(&ci, 0, sizeof(ci));
++        ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
++        ci.codeSize = size;
++        ci.pCode = (uint32_t*)shaderData;
++        VkResult v = vkCreateShaderModule(gCtx_Switcher.vkDevice, &ci, NULL, &gShaderModule_vertex_scene2);
++        free(shaderData);
++        if (v != VK_SUCCESS) return v;
++    }
++    {
++        const char* szFileName = "Shader_Scene2.frag.spv";
++        FILE* fp = fopen(szFileName, "rb");
++        if (!fp)
++        {
++            fprintf(gCtx_Switcher.gpFile, "createShaders() --> fopen() failed for Shader_Scene2.frag.spv\n");
++            return VK_ERROR_INITIALIZATION_FAILED;
++        }
++        fseek(fp, 0L, SEEK_END);
++        size_t size = (size_t)ftell(fp);
++        fseek(fp, 0L, SEEK_SET);
++        char* shaderData = (char*)malloc(size);
++        size_t retVal = fread(shaderData, size, 1, fp);
++        fclose(fp);
++        if (retVal != 1)
++        {
++            free(shaderData);
++            fprintf(gCtx_Switcher.gpFile, "createShaders() --> fread() failed for Shader_Scene2.frag.spv\n");
++            return VK_ERROR_INITIALIZATION_FAILED;
++        }
++        VkShaderModuleCreateInfo ci;
++        memset(&ci, 0, sizeof(ci));
++        ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
++        ci.codeSize = size;
++        ci.pCode = (uint32_t*)shaderData;
++        VkResult v = vkCreateShaderModule(gCtx_Switcher.vkDevice, &ci, NULL, &gShaderModule_fragment_scene2);
++        free(shaderData);
++        if (v != VK_SUCCESS) return v;
++    }
++    fprintf(gCtx_Switcher.gpFile, "createShaders() --> Scene 2 shader modules created\n");
++
+     return (vkResult);
+ }
+ 
+@@ -909,16 +984,16 @@ VkResult createDescriptorPool(void)
+     //code
+     //before creating actual descriptor pool, vulkan expects descriptor pool size
+-    //0th index --> uniform
+-    //1st index --> texture image
++    // 0: UBOs (scene0+scene1+scene2), 1: sampled images (scene0 + scene1 sky + scene1 overlay + scene2)
+     VkDescriptorPoolSize vkDescriptorPoolSize_array[2];
+     memset((void*)vkDescriptorPoolSize_array, 0, sizeof(VkDescriptorPoolSize) * _ARRAYSIZE(vkDescriptorPoolSize_array));
+     
+     //for MVP uniform
+     vkDescriptorPoolSize_array[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+-    vkDescriptorPoolSize_array[0].descriptorCount = 2;
++    vkDescriptorPoolSize_array[0].descriptorCount = 3;
+     
+     //for Texture and sampler uniform 
+     vkDescriptorPoolSize_array[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+-    vkDescriptorPoolSize_array[1].descriptorCount = 2;
++    vkDescriptorPoolSize_array[1].descriptorCount = 4;
+@@ -955,18 +1030,22 @@ VkResult createDescriptorSet(void)
+     //Initialize descriptorset allocation info
+     VkDescriptorSetAllocateInfo vkDescriptorSetAllocateInfo;
+     memset((void*)&vkDescriptorSetAllocateInfo, 0, sizeof(VkDescriptorSetAllocateInfo));
+     vkDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+     vkDescriptorSetAllocateInfo.pNext = NULL;
+     vkDescriptorSetAllocateInfo.descriptorPool = gCtx_Switcher.vkDescriptorPool;
+-    vkDescriptorSetAllocateInfo.descriptorSetCount = 2;
+-    VkDescriptorSetLayout vkDescriptorSetLayout_array[2] =
++    vkDescriptorSetAllocateInfo.descriptorSetCount = 3;
++    VkDescriptorSetLayout vkDescriptorSetLayout_array[3] =
+     {
+         gCtx_Switcher.vkDescriptorSetLayout,
+-        gCtx_Switcher.vkDescriptorSetLayout
++        gCtx_Switcher.vkDescriptorSetLayout,
++        gCtx_Switcher.vkDescriptorSetLayout
+     };
+     vkDescriptorSetAllocateInfo.pSetLayouts = vkDescriptorSetLayout_array;
+ 
+-    VkDescriptorSet vkDescriptorSet_array[2];
++    VkDescriptorSet vkDescriptorSet_array[3];
+     vkResult = vkAllocateDescriptorSets(gCtx_Switcher.vkDevice, &vkDescriptorSetAllocateInfo, vkDescriptorSet_array);
+     if(vkResult != VK_SUCCESS)
+     {
+         fprintf(gCtx_Switcher.gpFile, "createDescriptorSet() --> vkAllocateDescriptorSets() is failed & error code is %d\n", vkResult);
+         return vkResult;
+     }
+     else
+     {
+         fprintf(gCtx_Switcher.gpFile, "createDescriptorSet() --> vkAllocateDescriptorSets() is succedded\n");
+     }
+ 
+     gCtx_Switcher.vkDescriptorSet_scene0 = vkDescriptorSet_array[0];
+     gCtx_Switcher.vkDescriptorSet_scene1 = vkDescriptorSet_array[1];
++    gCtx_Switcher.vkDescriptorSet_scene2 = vkDescriptorSet_array[2];
+@@ -1010,6 +1089,14 @@ VkResult createDescriptorSet(void)
+     vkDescriptorImageInfo.imageView = gCtx_Switcher.vkImageView_texture;
+     vkDescriptorImageInfo.sampler = gCtx_Switcher.vkSampler_texture;
+     
++    /* Scene 2 texture image & sampler */
++    VkDescriptorImageInfo vkDescriptorImageInfo_scene2;
++    memset((void*)&vkDescriptorImageInfo_scene2, 0, sizeof(vkDescriptorImageInfo_scene2));
++    vkDescriptorImageInfo_scene2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
++    vkDescriptorImageInfo_scene2.imageView = gCtx_Switcher.vkImageView_texture_scene2;
++    vkDescriptorImageInfo_scene2.sampler = gCtx_Switcher.vkSampler_texture_scene2;
++
++    
+     //now update the above descriptor set directly to shader
+     VkWriteDescriptorSet vkWriteDescriptorSet_array[4];
+     memset((void*)vkWriteDescriptorSet_array, 0, sizeof(VkWriteDescriptorSet) * _ARRAYSIZE(vkWriteDescriptorSet_array));
+@@ -1056,7 +1143,31 @@ VkResult createDescriptorSet(void)
+     vkWriteDescriptorSet_array[3].pImageInfo = &vkDescriptorImageInfo;
+     vkWriteDescriptorSet_array[3].pTexelBufferView = NULL;
+     vkWriteDescriptorSet_array[3].dstBinding = 1; //where to bind in shader, and our uniform is at binding 1 index in frag shader
+ 
+-    vkUpdateDescriptorSets(gCtx_Switcher.vkDevice, _ARRAYSIZE(vkWriteDescriptorSet_array), vkWriteDescriptorSet_array, 0, NULL);
++    /* Scene 2 UBO write */
++    VkWriteDescriptorSet writeScene2UBO;
++    memset((void*)&writeScene2UBO, 0, sizeof(writeScene2UBO));
++    writeScene2UBO.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++    writeScene2UBO.dstSet = gCtx_Switcher.vkDescriptorSet_scene2;
++    writeScene2UBO.dstArrayElement = 0;
++    writeScene2UBO.descriptorCount = 1;
++    writeScene2UBO.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
++    writeScene2UBO.pBufferInfo = &vkDescriptorBufferInfo_scene1; /* size/stride identical; overwritten below */
++    writeScene2UBO.pImageInfo = NULL;
++    writeScene2UBO.pTexelBufferView = NULL;
++    writeScene2UBO.dstBinding = 0;
++    /* Correct buffer for scene2 */
++    writeScene2UBO.pBufferInfo = (const VkDescriptorBufferInfo*)&(VkDescriptorBufferInfo){ gCtx_Switcher.uniformData_scene2.vkBuffer, 0, sizeof(GlobalContext_Switcher::MyUniformData) };
++
++    /* Scene 2 sampler write (binding 1) */
++    VkWriteDescriptorSet writeScene2Tex;
++    memset((void*)&writeScene2Tex, 0, sizeof(writeScene2Tex));
++    writeScene2Tex.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++    writeScene2Tex.dstSet = gCtx_Switcher.vkDescriptorSet_scene2;
++    writeScene2Tex.dstBinding = 1;
++    writeScene2Tex.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
++    writeScene2Tex.descriptorCount = 1;
++    writeScene2Tex.pImageInfo = &vkDescriptorImageInfo_scene2;
++
++    VkWriteDescriptorSet allWrites[6] = { vkWriteDescriptorSet_array[0], vkWriteDescriptorSet_array[1], vkWriteDescriptorSet_array[2], vkWriteDescriptorSet_array[3], writeScene2UBO, writeScene2Tex };
++    vkUpdateDescriptorSets(gCtx_Switcher.vkDevice, (uint32_t)_ARRAYSIZE(allWrites), allWrites, 0, NULL);
+     fprintf(gCtx_Switcher.gpFile, "createDescriptorSet() --> vkUpdateDescriptorSets() is succedded\n");
+     
+     return (vkResult);
+ }
+@@ -1123,6 +1234,40 @@ VkResult createPipeline(void)
+     vkDestroyPipelineCache(gCtx_Switcher.vkDevice, gCtx_Switcher.vkPipelineCache, NULL);
+     gCtx_Switcher.vkPipelineCache = VK_NULL_HANDLE;
+     
++    /* ===== Scene 2 Pipeline (opaque) ===== */
++    {
++        VkPipelineCacheCreateInfo pc;
++        memset((void*)&pc, 0, sizeof(pc));
++        pc.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
++        VkPipelineCache cache2 = VK_NULL_HANDLE;
++        vkCreatePipelineCache(gCtx_Switcher.vkDevice, &pc, NULL, &cache2);
++
++        VkPipelineShaderStageCreateInfo stages[2];
++        memset(stages, 0, sizeof(stages));
++        stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
++        stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
++        stages[0].module = gShaderModule_vertex_scene2;
++        stages[0].pName  = "main";
++        stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
++        stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
++        stages[1].module = gShaderModule_fragment_scene2;
++        stages[1].pName  = "main";
++
++        VkPipelineColorBlendAttachmentState blend;
++        memset(&blend, 0, sizeof(blend));
++        blend.colorWriteMask = 0xF;
++        blend.blendEnable    = VK_FALSE;
++        VkPipelineColorBlendStateCreateInfo cbs;
++        memset(&cbs, 0, sizeof(cbs));
++        cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
++        cbs.attachmentCount = 1;
++        cbs.pAttachments = &blend;
++
++        VkGraphicsPipelineCreateInfo info = vkGraphicsPipelineCreateInfo;
++        info.pStages = stages; info.stageCount = 2; info.pColorBlendState = &cbs;
++        VkResult pv = vkCreateGraphicsPipelines(gCtx_Switcher.vkDevice, cache2, 1, &info, NULL, &gCtx_Switcher.vkPipeline_scene2);
++        vkDestroyPipelineCache(gCtx_Switcher.vkDevice, cache2, NULL);
++        if (pv != VK_SUCCESS) return pv;
++    }
+     return (vkResult);
+ }
+ 
+@@ -1154,6 +1299,17 @@ VkResult createCommandBuffers(void)
+    gCtx_Switcher.vkCommandBuffer_scene0_array = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * gCtx_Switcher.swapchainImageCount);
+    gCtx_Switcher.vkCommandBuffer_scene1_array = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * gCtx_Switcher.swapchainImageCount);
++   gCtx_Switcher.vkCommandBuffer_scene2_array = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer) * gCtx_Switcher.swapchainImageCount);
+@@ -1169,6 +1325,18 @@ VkResult createCommandBuffers(void)
+         }
+     }
+ 
+    for(uint32_t i = 0; i < gCtx_Switcher.swapchainImageCount; i++)
+     {
+         vkResult = vkAllocateCommandBuffers(gCtx_Switcher.vkDevice, &vkCommandBufferAllocateInfo, &gCtx_Switcher.vkCommandBuffer_scene1_array[i]);
+@@ -1181,6 +1349,18 @@ VkResult createCommandBuffers(void)
+         }
+     }
++
++   for(uint32_t i = 0; i < gCtx_Switcher.swapchainImageCount; i++)
++    {
++        vkResult = vkAllocateCommandBuffers(gCtx_Switcher.vkDevice, &vkCommandBufferAllocateInfo, &gCtx_Switcher.vkCommandBuffer_scene2_array[i]);
++        if(vkResult != VK_SUCCESS)
++        {
++            fprintf(gCtx_Switcher.gpFile, "createCommandBuffers() --> scene2 vkAllocateCommandBuffers() failed for %d iteration and error code is %d\n",i, vkResult);
++            return vkResult;
++        }
++        else
++        {
++            fprintf(gCtx_Switcher.gpFile, "createCommandBuffers() --> scene2 vkAllocateCommandBuffers() succeeded for iteration %d\n", i);
++        }
++    }
+    
+    return vkResult;   
+ }
+@@ -1200,18 +1380,23 @@ VkResult buildCommandBuffers(void)
+     //step1
+     //Loop per swapchainImagecount
+     for(uint32_t i = 0; i < gCtx_Switcher.swapchainImageCount; i++)
+     {
+-        VkCommandBuffer commandBuffers[2] =
++        VkCommandBuffer commandBuffers[3] =
+         {
+             gCtx_Switcher.vkCommandBuffer_scene0_array[i],
+-            gCtx_Switcher.vkCommandBuffer_scene1_array[i]
++            gCtx_Switcher.vkCommandBuffer_scene1_array[i],
++            gCtx_Switcher.vkCommandBuffer_scene2_array[i]
+         };
+ 
+-        VkPipeline pipelines[2] =
++        VkPipeline pipelines[3] =
+         {
+             gCtx_Switcher.vkPipeline_scene0,
+-            gCtx_Switcher.vkPipeline_scene1
++            gCtx_Switcher.vkPipeline_scene1,
++            gCtx_Switcher.vkPipeline_scene2
+         };
+ 
+-        VkDescriptorSet descriptorSets[2] =
++        VkDescriptorSet descriptorSets[3] =
+         {
+             gCtx_Switcher.vkDescriptorSet_scene0,
+-            gCtx_Switcher.vkDescriptorSet_scene1
++            gCtx_Switcher.vkDescriptorSet_scene1,
++            gCtx_Switcher.vkDescriptorSet_scene2
+         };
+ 
+-        for(uint32_t sceneIndex = 0; sceneIndex < 2; ++sceneIndex)
++        for(uint32_t sceneIndex = 0; sceneIndex < 3; ++sceneIndex)
+         {
+             VkCommandBuffer targetBuffer = commandBuffers[sceneIndex];
+@@ -1265,9 +1450,16 @@ VkResult buildCommandBuffers(void)
+                                    1,
+                                    &gCtx_Switcher.vertexData_texcoord.vkBuffer,
+                                    vkDeviceSize_offset_texcoord);
+ 
+-            vkCmdDraw(targetBuffer,
+-                      36,
+-                      1,
+-                      0,
+-                      0);
++            if (sceneIndex == 2)
++            {
++                /* Scene 2: fullscreen quad (first 6 verts of the VBOs) */
++                vkCmdDraw(targetBuffer, 6, 1, 0, 0);
++            }
++            else
++            {
++                /* Scene 0/1: cube */
++                vkCmdDraw(targetBuffer, 36, 1, 0, 0);
++            }
+ 
+             vkCmdEndRenderPass(targetBuffer);
+ 
+@@ -1298,6 +1490,38 @@ VkResult buildCommandBuffers(void)
+     return vkResult;
+ }
+ 
+@@ -1342,6 +1566,44 @@ VkResult createUniformBuffer(void)
+     }
+ 
+     vkResult = createUniformBufferForScene(gCtx_Switcher.uniformData_scene1);
+     if(vkResult != VK_SUCCESS)
+     {
+         fprintf(gCtx_Switcher.gpFile, "createUniformBuffer() --> failed to create scene1 uniform buffer %d\n", vkResult);
+         return vkResult;
+     }
+     else
+     {
+         fprintf(gCtx_Switcher.gpFile, "createUniformBuffer() --> created scene1 uniform buffer\n");
+     }
+ 
++    /* Scene 2 uniform buffer */
++    vkResult = createUniformBufferForScene(gCtx_Switcher.uniformData_scene2);
++    if(vkResult != VK_SUCCESS)
++    {
++        fprintf(gCtx_Switcher.gpFile, "createUniformBuffer() --> failed to create scene2 uniform buffer %d\n", vkResult);
++        return vkResult;
++    }
++    else
++    {
++        fprintf(gCtx_Switcher.gpFile, "createUniformBuffer() --> created scene2 uniform buffer\n");
++    }
++
+     vkResult = gFunctionTable_Switcher.updateUniformBuffer();
+@@ -1388,6 +1650,30 @@ VkResult updateUniformBuffer(void)
+     memcpy(scene1Data, &scene1Uniform, sizeof(GlobalContext_Switcher::MyUniformData));
+     vkUnmapMemory(gCtx_Switcher.vkDevice, gCtx_Switcher.uniformData_scene1.vkDeviceMemory);
+ 
++    /* Scene 2: identity MVP (fullscreen) */
++    {
++        GlobalContext_Switcher::MyUniformData s2;
++        memset((void*)&s2, 0, sizeof(s2));
++        s2.modelMatrix = glm::mat4(1.0f);
++        s2.viewMatrix = glm::mat4(1.0f);
++        s2.projectionMatrix = glm::mat4(1.0f);
++
++        void* p2 = NULL;
++        vkResult = vkMapMemory(gCtx_Switcher.vkDevice,
++                               gCtx_Switcher.uniformData_scene2.vkDeviceMemory,
++                               0,
++                               sizeof(GlobalContext_Switcher::MyUniformData),
++                               0,
++                               &p2);
++        if(vkResult != VK_SUCCESS)
++        {
++            fprintf(gCtx_Switcher.gpFile, "updateUniformBuffer() --> map scene2 failed %d\n", vkResult);
++            return vkResult;
++        }
++        memcpy(p2, &s2, sizeof(s2));
++        vkUnmapMemory(gCtx_Switcher.vkDevice, gCtx_Switcher.uniformData_scene2.vkDeviceMemory);
++    }
++
+     return vkResult;
+ }
+ 
+@@ -1549,6 +1835,108 @@ VkResult createTexture(const char* textureFileName)
+      return vkResult; 
+ }
+ 
++/* ===== Scene 2: texture loader (2D) – same as createTexture() but writes to *_scene2 fields ===== */
++static VkResult createTexture_Scene2(const char* textureFileName)
++{
++    VkResult vkResult = VK_SUCCESS;
++    FILE* fp = fopen(textureFileName, "rb");
++    if(fp == NULL)
++    {
++        fprintf(gCtx_Switcher.gpFile, "createTexture_Scene2() --> fopen() failed for %s\n", textureFileName);
++        return VK_ERROR_OUT_OF_HOST_MEMORY;
++    }
++
++    int w=0,h=0,ch=0;
++    uint8_t* imageData = stbi_load_from_file(fp, &w, &h, &ch, STBI_rgb_alpha);
++    fclose(fp);
++    if(!imageData || w<=0 || h<=0)
++    {
++        fprintf(gCtx_Switcher.gpFile, "createTexture_Scene2() --> stbi_load failed for %s\n", textureFileName);
++        return VK_ERROR_OUT_OF_HOST_MEMORY;
++    }
++
++    VkDeviceSize imageSize = (VkDeviceSize)w * (VkDeviceSize)h * 4;
++
++    VkBuffer staging = VK_NULL_HANDLE;
++    VkDeviceMemory stagingMem = VK_NULL_HANDLE;
++    VkBufferCreateInfo bci; memset(&bci,0,sizeof(bci));
++    bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
++    bci.size = imageSize;
++    bci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
++    vkCreateBuffer(gCtx_Switcher.vkDevice, &bci, NULL, &staging);
++
++    VkMemoryRequirements mr; memset(&mr,0,sizeof(mr));
++    vkGetBufferMemoryRequirements(gCtx_Switcher.vkDevice, staging, &mr);
++    VkMemoryAllocateInfo mai; memset(&mai,0,sizeof(mai));
++    mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
++    mai.allocationSize = mr.size;
++    {
++        uint32_t i;
++        for(i=0;i<gCtx_Switcher.vkPhysicalDeviceMemoryProperties.memoryTypeCount;++i)
++        {
++            if((mr.memoryTypeBits & (1u<<i)) &&
++               (gCtx_Switcher.vkPhysicalDeviceMemoryProperties.memoryTypes[i].propertyFlags &
++                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
++                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
++            { mai.memoryTypeIndex = i; break; }
++        }
++    }
++    vkAllocateMemory(gCtx_Switcher.vkDevice, &mai, NULL, &stagingMem);
++    vkBindBufferMemory(gCtx_Switcher.vkDevice, staging, stagingMem, 0);
++    void* map=NULL; vkMapMemory(gCtx_Switcher.vkDevice, stagingMem, 0, imageSize, 0, &map);
++    memcpy(map, imageData, (size_t)imageSize);
++    vkUnmapMemory(gCtx_Switcher.vkDevice, stagingMem);
++    stbi_image_free(imageData);
++
++    VkImageCreateInfo ici; memset(&ici,0,sizeof(ici));
++    ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
++    ici.imageType = VK_IMAGE_TYPE_2D;
++    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
++    ici.extent.width = (uint32_t)w; ici.extent.height = (uint32_t)h; ici.extent.depth = 1;
++    ici.mipLevels = 1; ici.arrayLayers = 1;
++    ici.samples = VK_SAMPLE_COUNT_1_BIT; ici.tiling = VK_IMAGE_TILING_OPTIMAL;
++    ici.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
++    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++    vkCreateImage(gCtx_Switcher.vkDevice, &ici, NULL, &gCtx_Switcher.vkImage_texture_scene2);
++
++    VkMemoryRequirements imr; memset(&imr,0,sizeof(imr));
++    vkGetImageMemoryRequirements(gCtx_Switcher.vkDevice, gCtx_Switcher.vkImage_texture_scene2, &imr);
++    VkMemoryAllocateInfo imai; memset(&imai,0,sizeof(imai));
++    imai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
++    imai.allocationSize = imr.size;
++    {
++        uint32_t i;
++        for(i=0;i<gCtx_Switcher.vkPhysicalDeviceMemoryProperties.memoryTypeCount;++i)
++        {
++            if((imr.memoryTypeBits & (1u<<i)) &&
++               (gCtx_Switcher.vkPhysicalDeviceMemoryProperties.memoryTypes[i].propertyFlags &
++                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
++            { imai.memoryTypeIndex = i; break; }
++        }
++    }
++    vkAllocateMemory(gCtx_Switcher.vkDevice, &imai, NULL, &gCtx_Switcher.vkDeviceMemory_texture_scene2);
++    vkBindImageMemory(gCtx_Switcher.vkDevice, gCtx_Switcher.vkImage_texture_scene2, gCtx_Switcher.vkDeviceMemory_texture_scene2, 0);
++
++    /* UNDEFINED -> TRANSFER_DST */
++    {
++        VkCommandBuffer cb;
++        VkCommandBufferAllocateInfo ai; memset(&ai,0,sizeof(ai));
++        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
++        ai.commandPool = gCtx_Switcher.vkCommandPool;
++        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
++        ai.commandBufferCount = 1;
++        vkAllocateCommandBuffers(gCtx_Switcher.vkDevice, &ai, &cb);
++        VkCommandBufferBeginInfo bi; memset(&bi,0,sizeof(bi));
++        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
++        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
++        vkBeginCommandBuffer(cb, &bi);
++        VkImageMemoryBarrier ib; memset(&ib,0,sizeof(ib));
++        ib.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
++        ib.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++        ib.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
++        ib.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++        ib.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++        ib.image = gCtx_Switcher.vkImage_texture_scene2;
++        ib.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++        ib.subresourceRange.levelCount = 1;
++        ib.subresourceRange.layerCount = 1;
++        ib.srcAccessMask = 0;
++        ib.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
++        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,NULL, 0,NULL, 1,&ib);
++        vkEndCommandBuffer(cb);
++        VkSubmitInfo si; memset(&si,0,sizeof(si));
++        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
++        si.commandBufferCount = 1; si.pCommandBuffers = &cb;
++        vkQueueSubmit(gCtx_Switcher.vkQueue, 1, &si, VK_NULL_HANDLE);
++        vkQueueWaitIdle(gCtx_Switcher.vkQueue);
++        vkFreeCommandBuffers(gCtx_Switcher.vkDevice, gCtx_Switcher.vkCommandPool, 1, &cb);
++    }
++    /* copy buffer -> image */
++    {
++        VkCommandBuffer cb;
++        VkCommandBufferAllocateInfo ai; memset(&ai,0,sizeof(ai));
++        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
++        ai.commandPool = gCtx_Switcher.vkCommandPool;
++        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
++        ai.commandBufferCount = 1;
++        vkAllocateCommandBuffers(gCtx_Switcher.vkDevice, &ai, &cb);
++        VkCommandBufferBeginInfo bi; memset(&bi,0,sizeof(bi));
++        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
++        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
++        vkBeginCommandBuffer(cb, &bi);
++        VkBufferImageCopy region; memset(&region,0,sizeof(region));
++        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++        region.imageSubresource.mipLevel = 0;
++        region.imageSubresource.baseArrayLayer = 0;
++        region.imageSubresource.layerCount = 1;
++        region.imageExtent.width = (uint32_t)w;
++        region.imageExtent.height= (uint32_t)h;
++        region.imageExtent.depth = 1;
++        vkCmdCopyBufferToImage(cb, staging, gCtx_Switcher.vkImage_texture_scene2, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
++        vkEndCommandBuffer(cb);
++        VkSubmitInfo si; memset(&si,0,sizeof(si));
++        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO; si.commandBufferCount = 1; si.pCommandBuffers = &cb;
++        vkQueueSubmit(gCtx_Switcher.vkQueue, 1, &si, VK_NULL_HANDLE);
++        vkQueueWaitIdle(gCtx_Switcher.vkQueue);
++        vkFreeCommandBuffers(gCtx_Switcher.vkDevice, gCtx_Switcher.vkCommandPool, 1, &cb);
++    }
++    /* TRANSFER_DST -> SHADER_READ_ONLY */
++    {
++        VkCommandBuffer cb;
++        VkCommandBufferAllocateInfo ai; memset(&ai,0,sizeof(ai));
++        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
++        ai.commandPool = gCtx_Switcher.vkCommandPool;
++        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
++        ai.commandBufferCount = 1;
++        vkAllocateCommandBuffers(gCtx_Switcher.vkDevice, &ai, &cb);
++        VkCommandBufferBeginInfo bi; memset(&bi,0,sizeof(bi));
++        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
++        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
++        vkBeginCommandBuffer(cb, &bi);
++        VkImageMemoryBarrier ib; memset(&ib,0,sizeof(ib));
++        ib.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
++        ib.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
++        ib.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
++        ib.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++        ib.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++        ib.image = gCtx_Switcher.vkImage_texture_scene2;
++        ib.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++        ib.subresourceRange.levelCount = 1;
++        ib.subresourceRange.layerCount = 1;
++        ib.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
++        ib.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
++        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,NULL, 0,NULL, 1,&ib);
++        vkEndCommandBuffer(cb);
++        VkSubmitInfo si; memset(&si,0,sizeof(si));
++        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO; si.commandBufferCount = 1; si.pCommandBuffers = &cb;
++        vkQueueSubmit(gCtx_Switcher.vkQueue, 1, &si, VK_NULL_HANDLE);
++        vkQueueWaitIdle(gCtx_Switcher.vkQueue);
++        vkFreeCommandBuffers(gCtx_Switcher.vkDevice, gCtx_Switcher.vkCommandPool, 1, &cb);
++    }
++
++    VkImageViewCreateInfo vci; memset(&vci,0,sizeof(vci));
++    vci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
++    vci.image = gCtx_Switcher.vkImage_texture_scene2;
++    vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
++    vci.format = VK_FORMAT_R8G8B8A8_UNORM;
++    vci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++    vci.subresourceRange.levelCount = 1;
++    vci.subresourceRange.layerCount = 1;
++    vkCreateImageView(gCtx_Switcher.vkDevice, &vci, NULL, &gCtx_Switcher.vkImageView_texture_scene2);
++
++    VkSamplerCreateInfo sci; memset(&sci,0,sizeof(sci));
++    sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
++    sci.magFilter = VK_FILTER_LINEAR; sci.minFilter = VK_FILTER_LINEAR;
++    sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
++    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
++    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
++    sci.addressModeW = VK_SAMPLER_MIPMAP_MODE_LINEAR == VK_SAMPLER_MIPMAP_MODE_LINEAR ? VK_SAMPLER_ADDRESS_MODE_REPEAT : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
++    sci.maxAnisotropy = 16.0f;
++    vkCreateSampler(gCtx_Switcher.vkDevice, &sci, NULL, &gCtx_Switcher.vkSampler_texture_scene2);
++
++    /* cleanup staging */
++    vkFreeMemory(gCtx_Switcher.vkDevice, stagingMem, NULL);
++    vkDestroyBuffer(gCtx_Switcher.vkDevice, staging, NULL);
++
++    return VK_SUCCESS;
++}
++
+@@ -1760,6 +2146,20 @@ VkResult Initialize(void)
+     }
+ 
+     //create texture
+     vkResult = gFunctionTable_Switcher.createTexture("Vijay_Kundali.png");
+@@ -1781,6 +2181,16 @@ VkResult Initialize(void)
+         fprintf(gCtx_Switcher.gpFile, "Initialize() --> createTexture() is succedded for Stone texture\n");
+     }
++
++    /* ===== Scene 2 texture ===== */
++    vkResult = createTexture_Scene2("EndCredits.png");
++    if(vkResult != VK_SUCCESS)
++    {
++        fprintf(gCtx_Switcher.gpFile, "Initialize() --> createTexture_Scene2() failed %d\n", vkResult);
++        return vkResult;
++    }
++    else
++    {
++        fprintf(gCtx_Switcher.gpFile, "Initialize() --> createTexture_Scene2() succeeded\n");
++    }
