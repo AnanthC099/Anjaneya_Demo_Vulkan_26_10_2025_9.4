@@ -749,6 +749,7 @@ typedef enum SequenceStateTag
     SEQUENCE_IDLE = 0,
     SEQUENCE_SCENE0_HOLD,
     SEQUENCE_SCENE0_FADE_OUT,
+    SEQUENCE_SCENE1_DELAY,
     SEQUENCE_SCENE1_FADE_IN,
     SEQUENCE_SCENE1_RUN,
     SEQUENCE_SCENE1_WAIT,
@@ -762,13 +763,15 @@ static SequenceState sSequenceState = SEQUENCE_IDLE;
 static DWORD         sSequenceStateStartMs = 0;
 static BOOL          sSequenceAudioStarted = FALSE;
 
-static const DWORD K_SEQUENCE_FADE_MS               = 1500u;
+static const DWORD K_SEQUENCE_FADE_MS                    = 1500u;
 static const DWORD K_SEQUENCE_SCENE0_FADE_IN_DELAY_MS    = 6000u;
 static const DWORD K_SEQUENCE_SCENE0_FADE_WINDOW_MS      = 2000u;
-static const DWORD K_SEQUENCE_SCENE0_VISIBLE_HOLD_MS     = 4000u;
-static const DWORD K_SEQUENCE_SCENE1_WAIT_MS       = 5000u;
-static const DWORD K_SEQUENCE_SCENE2_HOLD_MS       = 7000u;
-static const char  K_SEQUENCE_AUDIO_PATH[]         = "Omega.wav";
+static const DWORD K_SEQUENCE_SCENE0_VISIBLE_HOLD_MS     = 5000u;
+static const DWORD K_SEQUENCE_SCENE0_TO_SCENE1_DELAY_MS  = 1000u;
+static const DWORD K_SEQUENCE_SCENE1_WAIT_MS             = 5000u;
+static const DWORD K_SEQUENCE_SCENE2_HOLD_MS             = 7000u;
+static const DWORD K_SEQUENCE_AUDIO_START_DELAY_MS       = 1000u;
+static const char  K_SEQUENCE_AUDIO_PATH[]               = "Omega.wav";
 
 static void StartShowcaseAudio(void);
 
@@ -833,6 +836,11 @@ static void EnterSequenceState(SequenceState state)
     case SEQUENCE_SCENE0_FADE_OUT:
         gActiveScene = ACTIVE_SCENE_SCENE0;
         break;
+    case SEQUENCE_SCENE1_DELAY:
+        gActiveScene = ACTIVE_SCENE_SCENE0;
+        gCtx_Switcher.gFade = 0.0f;
+        UpdateBlendFade(gCtx_Switcher.gFade);
+        break;
     case SEQUENCE_SCENE1_FADE_IN:
         gActiveScene = ACTIVE_SCENE_SCENE1;
         gCtx_Switcher.gFade = 0.0f;
@@ -886,7 +894,11 @@ static void StartShowcaseAudio(void)
 
 static void StartShowcaseSequence(void)
 {
-    StartShowcaseAudio();
+    if (sSequenceAudioStarted)
+    {
+        PlaySoundA(NULL, NULL, 0);
+        sSequenceAudioStarted = FALSE;
+    }
     EnterSequenceState(SEQUENCE_SCENE0_HOLD);
 }
 
@@ -916,7 +928,7 @@ static void UpdateShowcaseSequence(void)
     case SEQUENCE_SCENE0_HOLD:
     {
         DWORD elapsed = now - sSequenceStateStartMs;
-        if (!sSequenceAudioStarted && elapsed >= K_SEQUENCE_SCENE0_FADE_IN_DELAY_MS)
+        if (!sSequenceAudioStarted && elapsed >= K_SEQUENCE_AUDIO_START_DELAY_MS)
         {
             StartShowcaseAudio();
             sSequenceAudioStarted = TRUE;
@@ -953,6 +965,14 @@ static void UpdateShowcaseSequence(void)
         gCtx_Switcher.gFade = 1.0f - t;
         UpdateBlendFade(gCtx_Switcher.gFade);
         if (t >= 1.0f)
+        {
+            EnterSequenceState(SEQUENCE_SCENE1_DELAY);
+        }
+    } break;
+
+    case SEQUENCE_SCENE1_DELAY:
+    {
+        if (now - sSequenceStateStartMs >= K_SEQUENCE_SCENE0_TO_SCENE1_DELAY_MS)
         {
             EnterSequenceState(SEQUENCE_SCENE1_FADE_IN);
         }
